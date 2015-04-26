@@ -149,11 +149,16 @@ int yawSample[numReadings];
 int index = 0;
 int total = 0;
 int aveYaw = 0;
+int minYaw = 1000;
+int maxYaw = 0;
+int difYaw = 0;
+int oldDifYaw = 0;
 int iteration = 0;
+int butPin = 4;
+int butState = 0;
 float posCount = 0;
 float negCount = 0;
-boolean longStride = false;
-
+boolean wasWalking = false;
 
 
 // ================================================================
@@ -200,12 +205,6 @@ void setup() {
     Serial.println(F("Testing device connections..."));
     Serial.println(mpu.testConnection() ? F("MPU6050 connection successful") : F("MPU6050 connection failed"));
 
-    // wait for ready
-    Serial.println(F("\nSend any character to begin DMP programming and demo: "));
-    while (Serial.available() && Serial.read()); // empty buffer
-    while (!Serial.available());                 // wait for data
-    while (Serial.available() && Serial.read()); // empty buffer again
-
     // load and configure the DMP
     Serial.println(F("Initializing DMP..."));
     devStatus = mpu.dmpInitialize();
@@ -246,6 +245,7 @@ void setup() {
     // configure LED for output
     pinMode(LED_PIN, OUTPUT);
     pinMode(led, OUTPUT);
+    pinMode(butPin, INPUT);
     
     //initialize all the readings to 0:
     for(int thisReading = 0; thisReading < numReadings; thisReading++) yawSample[thisReading] = 0;
@@ -394,7 +394,7 @@ void loop() {
    
     if(stabilize >= 1400) {
       iteration++; 
-        Serial.println("IPNA: ");
+        Serial.println("IPNAMiMaOD: ");
         Serial.print(iteration);
         Serial.print("  ");
         Serial.print(posCount);
@@ -403,8 +403,16 @@ void loop() {
         Serial.print("  ");
         Serial.print(aveYaw);
         Serial.print("  ");
-      
-      //Calculate average sensor values
+        Serial.print(minYaw);
+        Serial.print("  ");
+        Serial.print(maxYaw);
+        Serial.print("  ");
+        Serial.print(oldDifYaw);
+        Serial.print("  ");
+        Serial.print(difYaw);
+        Serial.print("  ");
+
+        //Calculate average sensor values
       total = total - yawSample[index];
       yawSample[index] = (ypr[0] * (180/M_PI));
       total = total + yawSample[index];
@@ -412,19 +420,35 @@ void loop() {
       //if at the end of the array, wrap around to the beginning
       if(index >= numReadings) index = 0;
       
+      minYaw = min(minYaw, yawSample[index]);
+      maxYaw = max(maxYaw, yawSample[index]);
       aveYaw = total / numReadings;
 
-      if(!walking()) {
-        digitalWrite(led, LOW);
+      butState = digitalRead(butPin);
+      //Serial.print("butPin");
+      //Serial.print(butState);
+      
+      if(!walking() && wasWalking) {
+        digitalWrite(led, HIGH);
       }   
       if(walking()) {
         Serial.println("WALKING DETECTED");
-        digitalWrite(led, HIGH);
+        digitalWrite(led, LOW);
+        wasWalking = true;
       }
-      if(iteration > 1000) {
+      if(iteration > 200) {
+        difYaw = abs(maxYaw - minYaw);
+        if(stutterStep() && wasWalking) {
+          digitalWrite(led, HIGH);
+        }
+      }
+      if(iteration > 500) {
         iteration = 0;
         posCount = 0;
         negCount = 0;
+        minYaw = aveYaw;
+        maxYaw = aveYaw;
+        oldDifYaw = difYaw;
       }
     }  
 }
@@ -438,10 +462,15 @@ boolean walking () {
     negCount++;
   }
   if((posCount > 20) && (negCount > 20)) {
-    if(.5 < posCount/negCount < 1.5) {
+    if(.8 < posCount/negCount < 1.2) {
       return true;
     }
   }
   else return false;
   
+}
+
+boolean stutterStep() {
+  if(difYaw < (oldDifYaw - 10)) return true;
+  else return false;
 }
