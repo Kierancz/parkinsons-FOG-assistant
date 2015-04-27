@@ -156,9 +156,12 @@ int oldDifYaw = 0;
 int iteration = 0;
 int butPin = 4;
 int butState = 0;
+int initIter = 0;
 float posCount = 0;
 float negCount = 0;
 boolean wasWalking = false;
+int potPin = A0;
+
 
 
 // ================================================================
@@ -246,6 +249,7 @@ void setup() {
     pinMode(LED_PIN, OUTPUT);
     pinMode(led, OUTPUT);
     pinMode(butPin, INPUT);
+    pinMode(potPin, INPUT);
     
     //initialize all the readings to 0:
     for(int thisReading = 0; thisReading < numReadings; thisReading++) yawSample[thisReading] = 0;
@@ -411,7 +415,10 @@ void loop() {
         Serial.print("  ");
         Serial.print(difYaw);
         Serial.print("  ");
-
+        Serial.print("Hello Pot");
+        Serial.print(analogRead(potPin));
+        Serial.print("  ");
+        
         //Calculate average sensor values
       total = total - yawSample[index];
       yawSample[index] = (ypr[0] * (180/M_PI));
@@ -428,19 +435,23 @@ void loop() {
       //Serial.print("butPin");
       //Serial.print(butState);
       
-      if(!walking() && wasWalking) {
+      if(!walking() && wasWalking && iteration > 200) {
         digitalWrite(led, HIGH);
       }   
       if(walking()) {
         Serial.println("WALKING DETECTED");
-        digitalWrite(led, LOW);
+        initIter = iteration;
+        //digitalWrite(led, LOW);
         wasWalking = true;
+      }
+      if(iteration > (initIter + 100)) {
+        digitalWrite(led, LOW);
       }
       if(iteration > 200) {
         difYaw = abs(maxYaw - minYaw);
-        if(stutterStep() && wasWalking) {
-          digitalWrite(led, HIGH);
-        }
+        //if(stutterStep() && wasWalking) {
+          //digitalWrite(led, HIGH);
+        //}
       }
       if(iteration > 500) {
         iteration = 0;
@@ -449,20 +460,21 @@ void loop() {
         minYaw = aveYaw;
         maxYaw = aveYaw;
         oldDifYaw = difYaw;
+        initIter = 0;
       }
     }  
 }
 
 
 boolean walking () {
-  if(ypr[0] * (180/M_PI) >= (aveYaw + 5)) {
+  if(ypr[0] * (180/M_PI) >= (aveYaw + 3)) {
     posCount++;
   }
-  if(ypr[0] * (180/M_PI) <= (aveYaw - 5)) {
+  if(ypr[0] * (180/M_PI) <= (aveYaw - 3)) {
     negCount++;
   }
-  if((posCount > 20) && (negCount > 20)) {
-    if(.8 < posCount/negCount < 1.2) {
+  if((posCount > 10) && (negCount > 10)) {
+    if(.5 < posCount/negCount < 1.5) {
       return true;
     }
   }
@@ -470,7 +482,12 @@ boolean walking () {
   
 }
 
-boolean stutterStep() {
-  if(difYaw < (oldDifYaw - 10)) return true;
+/*boolean stutterStep() {
+  int triggerlevel;
+  if(potPin < 341) triggerlevel = 5;
+  if(341 < potPin < 682) triggerlevel = 10;
+  if(682 < potPin < 1023) triggerlevel = 15; 
+  if(difYaw < (oldDifYaw - triggerlevel)) return true;
   else return false;
-}
+}*/
+
